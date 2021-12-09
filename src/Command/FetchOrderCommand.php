@@ -21,6 +21,11 @@ class FetchOrderCommand extends Command
         return Command::SUCCESS;
     }
 
+    public function returnValue() : bool
+    {
+        return true;
+    }
+
     private function getDataFromUrl() : bool
     {
         $fileSystem = new Filesystem();
