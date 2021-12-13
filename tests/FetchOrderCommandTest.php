@@ -21,9 +21,27 @@ class FetchOrderCommandTest extends KernelTestCase
      * @depends testCommand
      * @param FetchOrderCommand $fetchOrderCommand
      */
-    public function testReturnValue(FetchOrderCommand $fetchOrderCommand)
+    public function testGetDataFromUrl(FetchOrderCommand $fetchOrderCommand)
     {
-        $this->assertTrue($this->callMethod($fetchOrderCommand, 'returnValue'));
+        $response = $this->callMethod($fetchOrderCommand, 'getDataFromUrl');
+        $this->assertTrue($response);
+        return $response;
+    }
+
+    /**
+     * @depends testCommand
+     * @depends testGetDataFromUrl
+     * @param FetchOrderCommand $fetchOrderCommand
+     * @param bool $response
+     */
+    public function testProcessFile(FetchOrderCommand $fetchOrderCommand, bool $response)
+    {
+        if($response) {
+            $data = $this->callMethod($fetchOrderCommand, 'processFile');
+            $this->assertIsArray($data);
+            $this->assertNotEmpty($data);
+            var_dump($data);
+        }
     }
 
     private function callMethod($object, string $method, array $parameters = [])
