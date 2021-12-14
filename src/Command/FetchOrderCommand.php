@@ -66,7 +66,7 @@ class FetchOrderCommand extends Command
             $fileSystem->mkdir('storage', 0700);
         }
         try {
-            //$fileSystem->dumpFile('storage/orders.jsonl', file_get_contents($_ENV['DATA_URL']));
+            $fileSystem->dumpFile('storage/orders.jsonl', file_get_contents($_ENV['DATA_URL']));
             $response = true;
         }
         catch(IOException $e) {
