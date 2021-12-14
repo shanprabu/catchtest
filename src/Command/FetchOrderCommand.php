@@ -12,11 +12,12 @@ use Symfony\Component\Filesystem\Path;
 
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
-
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Serializer\Encoder\CsvEncoder;
-
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Rs\JsonLines\JsonLines;
 use Carbon\Carbon;
+use Exception;
 use Symfony\Component\Console\Input\InputArgument;
 
 class FetchOrderCommand extends Command
@@ -28,10 +29,14 @@ class FetchOrderCommand extends Command
     const TOTAL_COUNT = 2;
 
     private $mailer;
+    private $client;
+    private $logger;
 
-    public function __construct(MailerInterface $mailer)
+    public function __construct(MailerInterface $mailer, HttpClientInterface $client, LoggerInterface $logger)
     {
         $this->mailer = $mailer;
+        $this->client = $client;
+        $this->logger = $logger;
         parent::__construct();
     }
 
@@ -70,7 +75,7 @@ class FetchOrderCommand extends Command
             $response = true;
         }
         catch(IOException $e) {
-            echo "Error downloading file - " . $e->getMessage();
+            $this->logger->error("Error downloading file - " . $e->getMessage());
             $response = false;
         }
         return $response;
@@ -82,6 +87,7 @@ class FetchOrderCommand extends Command
         foreach ($jsonFile as $jsonLine) {
             $orderData = json_decode($jsonLine);
             if($this->getTotalOrderValue($orderData->items) > 0) {
+                $addressLatLng = $this->getLatLongFromAddress($orderData->customer->shipping_address);
                 $orders[] = [
                     'order_id' => $orderData->order_id,
                     'order_datetime' => Carbon::parse($orderData->order_date)->toIso8601String(),
@@ -89,7 +95,9 @@ class FetchOrderCommand extends Command
                     'average_unit_price' => $this->getAverageUnitPrice($orderData->items),
                     'distinct_unit_count' => $this->getItemCount($orderData->items, self::DISTINCT_COUNT),
                     'total_units_count' => $this->getItemCount($orderData->items, self::TOTAL_COUNT),
-                    'customer_state' => $orderData->customer->shipping_address->state
+                    'customer_state' => $orderData->customer->shipping_address->state,
+                    'address_lat' => $addressLatLng->lat,
+                    'address_lng' => $addressLatLng->lng
                 ];    
             }
         }
@@ -152,5 +160,23 @@ class FetchOrderCommand extends Command
         ->text('Please download the attached file')
         ->attachFromPath('storage/out.csv');
         $this->mailer->send($email);
+    }
+
+    private function getLatLongFromAddress($address)
+    {
+        $fullAddress = $address->street . ", " . $address->suburb . ", " . $address->state . " " . $address->postcode;
+        $requestUrl = "https://maps.googleapis.com/maps/api/geocode/json?address=" . urlencode($fullAddress) . "&key=" . $_ENV['GOOGLE_API_KEY'];
+        try {
+            $response = $this->client->request('GET', $requestUrl);
+            if($response->getStatusCode() == 200) {
+                $geoData = json_decode($response->getContent());
+                $locationData = array_shift($geoData->results);
+                $addressLatLng = $locationData->geometry->location;
+            }
+        }
+        catch(Exception $e) {
+            $this->logger->error("Error in Google API - " . $e->getMessage());
+        }
+        return $addressLatLng;
     }
 }
